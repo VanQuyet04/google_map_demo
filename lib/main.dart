@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -86,7 +87,7 @@ class MapSampleState extends State<MapSample> {
             ),
           ),
           if (_suggestions.isNotEmpty) // Hiển thị gợi ý nếu có
-            Container(
+            SizedBox(
               height: 200, // Chiều cao của danh sách gợi ý
               child: ListView.builder(
                 itemCount: _suggestions.length,
@@ -141,9 +142,12 @@ class MapSampleState extends State<MapSample> {
         _addMarker(target);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Location not found: $e')),
-      );
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location not found: $e')),
+        );
+      }
+
     }
   }
 
@@ -156,7 +160,9 @@ class MapSampleState extends State<MapSample> {
       });
     } catch (e) {
       // Xử lý lỗi
-      print(e);
+      if (kDebugMode) {
+        print(e);
+      }
     }
   }
   Future<void> _goToMyLocation() async {
