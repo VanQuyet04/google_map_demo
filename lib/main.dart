@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart'; // Import Geolocator
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'google_maps_service.dart'; // Nhập dịch vụ GoogleMapsService
 
 void main() {
   runApp(const MyApp());
@@ -33,50 +34,25 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
-
   final Completer<GoogleMapController> _controller =
-      Completer<GoogleMapController>();
+  Completer<GoogleMapController>();
   final TextEditingController _searchController = TextEditingController();
+  final GoogleMapsService _mapsService = GoogleMapsService();
+  List<String> _suggestions = []; // Danh sách gợi ý
 
-  // set vị trí hiện tại khi mới vào app
   static const CameraPosition _kGooglePlex = CameraPosition(
     target: LatLng(21.0285, 105.8040), // Tọa độ của Hà Nội, Việt Nam
     zoom: 14.0,
   );
 
-  final Set<Marker> _markers = {}; // set nơi lưu dữ liệu của địa chỉ tìm được
-  final Set<Circle> _circles = {}; // set nơi lưu dữ liệu địa chỉ cần bọc hình tròn
-  MapType _currentMapType = MapType.normal; // Kiểu bản đồ hiện tại
+  final Set<Marker> _markers = {}; // Để lưu trữ các marker
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Google Maps Search'),
         backgroundColor: Colors.deepPurple,
-        actions: [
-          // Nút chọn kiểu bản đồ
-          PopupMenuButton<MapType>(
-            onSelected: (MapType type) {
-              setState(() {
-                _currentMapType = type; // Cập nhật kiểu bản đồ
-              });
-            },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<MapType>>[
-              const PopupMenuItem<MapType>(
-                value: MapType.normal,
-                child: Text('Đường phố'),
-              ),
-              const PopupMenuItem<MapType>(
-                value: MapType.terrain,
-                child: Text('Địa hình'),
-              ),
-              const PopupMenuItem<MapType>(
-                value: MapType.hybrid,
-                child: Text('Vệ tinh'),
-              ),
-            ],
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -91,6 +67,15 @@ class MapSampleState extends State<MapSample> {
                       hintText: 'Enter location',
                       border: OutlineInputBorder(),
                     ),
+                    onChanged: (value) {
+                      if (value.isNotEmpty) {
+                        _getSuggestions(value);
+                      } else {
+                        setState(() {
+                          _suggestions.clear(); // Xóa gợi ý khi ô tìm kiếm rỗng
+                        });
+                      }
+                    },
                   ),
                 ),
                 IconButton(
@@ -100,17 +85,29 @@ class MapSampleState extends State<MapSample> {
               ],
             ),
           ),
+          if (_suggestions.isNotEmpty) // Hiển thị gợi ý nếu có
+            Container(
+              height: 200, // Chiều cao của danh sách gợi ý
+              child: ListView.builder(
+                itemCount: _suggestions.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    title: Text(_suggestions[index]),
+                    onTap: () {
+                      _searchController.text = _suggestions[index]; // Cập nhật ô tìm kiếm
+                      _searchLocation(); // Tìm kiếm địa điểm
+                    },
+                  );
+                },
+              ),
+            ),
           Expanded(
             child: GoogleMap(
-              mapType: _currentMapType,
-              // Sử dụng kiểu bản đồ hiện tại
               initialCameraPosition: _kGooglePlex,
               onMapCreated: (GoogleMapController controller) {
                 _controller.complete(controller);
               },
               markers: _markers,
-              circles: _circles,
-              minMaxZoomPreference: const MinMaxZoomPreference(5, 20),
             ),
           ),
         ],
@@ -123,23 +120,7 @@ class MapSampleState extends State<MapSample> {
     );
   }
 
-  Future<void> _goToMyLocation() async {
-    Position position = await _determinePosition();
-    LatLng target = LatLng(position.latitude, position.longitude);
-
-    final GoogleMapController controller = await _controller.future;
-    // lia camera đến vị trí hiện tại
-    controller.animateCamera(CameraUpdate.newCameraPosition(
-      CameraPosition(
-        target: target,
-        zoom: 14.0,
-      ),
-    ));
-
-    _addMarker(target); // Optional: Add a marker at the current location
-  }
-
-  //tìm kiếm
+  // Phương thức để tìm kiếm địa điểm
   Future<void> _searchLocation() async {
     String location = _searchController.text;
 
@@ -157,24 +138,43 @@ class MapSampleState extends State<MapSample> {
           ),
         ));
 
-        if (location.contains("quận") ||
-            location.contains("huyện") ||
-            location.contains("phường")) {
-          _drawCircle(target);
-        } else {
-          _addMarker(target);
-        }
+        _addMarker(target);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location not found: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Location not found: $e')),
+      );
     }
   }
 
-  // gán icon vị trí cho nơi được tìm kiếm
+  // Phương thức để lấy gợi ý địa điểm
+  Future<void> _getSuggestions(String input) async {
+    try {
+      final suggestions = await _mapsService.getPlaceSuggestions(input);
+      setState(() {
+        _suggestions = suggestions; // Cập nhật danh sách gợi ý
+      });
+    } catch (e) {
+      // Xử lý lỗi
+      print(e);
+    }
+  }
+  Future<void> _goToMyLocation() async {
+    Position position = await _determinePosition();
+    LatLng target = LatLng(position.latitude, position.longitude);
+
+    final GoogleMapController controller = await _controller.future;
+    // lia camera đến vị trí hiện tại
+    controller.animateCamera(CameraUpdate.newCameraPosition(
+      CameraPosition(
+        target: target,
+        zoom: 14.0,
+      ),
+    ));
+
+    _addMarker(target); // Optional: Add a marker at the current location
+  }
+  // Phương thức để thêm marker
   void _addMarker(LatLng position) {
     _markers.add(
       Marker(
@@ -184,29 +184,11 @@ class MapSampleState extends State<MapSample> {
           title: 'Specific Location',
           snippet: 'This is a specific location.',
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       ),
     );
 
     setState(() {});
   }
-
-  // vẽ khung bao bọc khu vực được tìm kiếm
-  void _drawCircle(LatLng position) {
-    _circles.add(
-      Circle(
-        circleId: const CircleId('custom_circle'),
-        center: position,
-        radius: 500,
-        fillColor: Colors.blue.withOpacity(0.3),
-        strokeColor: Colors.blue,
-        strokeWidth: 2,
-      ),
-    );
-
-    setState(() {});
-  }
-
   // hàm xác định vị trí hiện tại
   Future<Position> _determinePosition() async {
     bool serviceEnabled; // biến trạng thái dịch vụ gps
@@ -224,19 +206,15 @@ class MapSampleState extends State<MapSample> {
       // nếu quyền bị từ chối thì tiếp tục gửi yêu cầu
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // nếu quyền tiếp tục bị từ chối thì báo lỗi
         return Future.error('Location permissions are denied.');
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // nếu quyền bị từ chối vĩnh viễn thì ko làm gì và lập tức báo lỗi
       return Future.error('Location permissions are permanently denied.');
     }
 
     // When permissions are granted, return the current position
     return await Geolocator.getCurrentPosition();
-    // trả về thông tin vị trí
   }
-
 }
