@@ -36,7 +36,7 @@ class MapSample extends StatefulWidget {
 
 class MapSampleState extends State<MapSample> {
   final Completer<GoogleMapController> _controller =
-  Completer<GoogleMapController>();
+      Completer<GoogleMapController>();
   final TextEditingController _searchController = TextEditingController();
   final GoogleMapsService _mapsService = GoogleMapsService();
   List<String> _suggestions = []; // Danh sách gợi ý
@@ -112,19 +112,26 @@ class MapSampleState extends State<MapSample> {
           ),
           if (_suggestions.isNotEmpty) // Hiển thị gợi ý nếu có
             SizedBox(
-              height: 200, // Chiều cao của danh sách gợi ý
+              height: 150, // Chiều cao của danh sách gợi ý
               child: ListView.builder(
                 itemCount: _suggestions.length,
                 itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(_suggestions[index]),
-                    onTap: () {
-                      _searchController.text = _suggestions[index]; // Cập nhật ô tìm kiếm
-                      _searchLocation(); // Tìm kiếm địa điểm
-                    },
+                  return Column(
+                    children: [
+                      ListTile(
+                        title: Text(_suggestions[index]),
+                        onTap: () {
+                          _searchController.text = _suggestions[index]; // Cập nhật ô tìm kiếm
+                          _searchLocation(); // Tìm kiếm địa điểm
+                        },
+                      ),
+                      if (index < _suggestions.length - 1) // Kiểm tra không phải là mục cuối cùng
+                        const Divider(), // Vạch ngăn cách giữa các mục
+                    ],
                   );
                 },
               ),
+
             ),
           Expanded(
             child: GoogleMap(
@@ -165,6 +172,9 @@ class MapSampleState extends State<MapSample> {
         ));
 
         _addMarker(target);
+        setState(() {
+          _suggestions.clear(); // Xóa danh sách gợi ý
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -228,7 +238,8 @@ class MapSampleState extends State<MapSample> {
     LocationPermission permission; // Quyền
 
     // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled(); // Lấy trạng thái
+    serviceEnabled =
+        await Geolocator.isLocationServiceEnabled(); // Lấy trạng thái
     if (!serviceEnabled) {
       // Nếu dịch vụ chưa được bật thì báo lỗi
       return Future.error('Location services are disabled.');
