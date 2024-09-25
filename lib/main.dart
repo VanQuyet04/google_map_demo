@@ -40,6 +40,7 @@ class MapSampleState extends State<MapSample> {
   final TextEditingController _searchController = TextEditingController();
   final GoogleMapsService _mapsService = GoogleMapsService();
   List<String> _suggestions = []; // Danh sách gợi ý
+  MapType _currentMapType = MapType.normal; // Biến lưu trữ kiểu bản đồ
 
   static const CameraPosition _kGooglePlex = CameraPosition(
     target: LatLng(21.0285, 105.8040), // Tọa độ của Hà Nội, Việt Nam
@@ -54,6 +55,29 @@ class MapSampleState extends State<MapSample> {
       appBar: AppBar(
         title: const Text('Google Maps Search'),
         backgroundColor: Colors.deepPurple,
+        actions: [
+          PopupMenuButton<MapType>(
+            onSelected: (MapType type) {
+              setState(() {
+                _currentMapType = type; // Cập nhật kiểu bản đồ hiện tại
+              });
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<MapType>>[
+              const PopupMenuItem<MapType>(
+                value: MapType.normal,
+                child: Text('Đường phố'), // Street
+              ),
+              const PopupMenuItem<MapType>(
+                value: MapType.terrain,
+                child: Text('Địa hình'), // Terrain
+              ),
+              const PopupMenuItem<MapType>(
+                value: MapType.hybrid,
+                child: Text('Vệ tinh'), // Satellite
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -109,12 +133,13 @@ class MapSampleState extends State<MapSample> {
                 _controller.complete(controller);
               },
               markers: _markers,
+              mapType: _currentMapType, // Áp dụng kiểu bản đồ đã chọn
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _goToMyLocation, // Update to my location
+        onPressed: _goToMyLocation, // Cập nhật đến vị trí hiện tại
         label: const Text('My Location'),
         icon: const Icon(Icons.my_location),
       ),
@@ -142,12 +167,11 @@ class MapSampleState extends State<MapSample> {
         _addMarker(target);
       }
     } catch (e) {
-      if(mounted){
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Location not found: $e')),
         );
       }
-
     }
   }
 
@@ -165,12 +189,13 @@ class MapSampleState extends State<MapSample> {
       }
     }
   }
+
   Future<void> _goToMyLocation() async {
     Position position = await _determinePosition();
     LatLng target = LatLng(position.latitude, position.longitude);
 
     final GoogleMapController controller = await _controller.future;
-    // lia camera đến vị trí hiện tại
+    // Lia camera đến vị trí hiện tại
     controller.animateCamera(CameraUpdate.newCameraPosition(
       CameraPosition(
         target: target,
@@ -180,6 +205,7 @@ class MapSampleState extends State<MapSample> {
 
     _addMarker(target); // Optional: Add a marker at the current location
   }
+
   // Phương thức để thêm marker
   void _addMarker(LatLng position) {
     _markers.add(
@@ -195,21 +221,22 @@ class MapSampleState extends State<MapSample> {
 
     setState(() {});
   }
-  // hàm xác định vị trí hiện tại
+
+  // Hàm xác định vị trí hiện tại
   Future<Position> _determinePosition() async {
-    bool serviceEnabled; // biến trạng thái dịch vụ gps
-    LocationPermission permission; // quyền
+    bool serviceEnabled; // Biến trạng thái dịch vụ GPS
+    LocationPermission permission; // Quyền
 
     // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled(); // lấy trạng thái
+    serviceEnabled = await Geolocator.isLocationServiceEnabled(); // Lấy trạng thái
     if (!serviceEnabled) {
-      // nếu dịch vụ chưa đc bật thì báo lỗi
+      // Nếu dịch vụ chưa được bật thì báo lỗi
       return Future.error('Location services are disabled.');
     }
 
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      // nếu quyền bị từ chối thì tiếp tục gửi yêu cầu
+      // Nếu quyền bị từ chối thì tiếp tục gửi yêu cầu
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         return Future.error('Location permissions are denied.');
